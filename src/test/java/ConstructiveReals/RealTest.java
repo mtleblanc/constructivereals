@@ -11,9 +11,8 @@ public class RealTest {
 
     boolean validFloat(float approximation, double value) {
         double widened = approximation;
-        double error = widened - value;
-        widened += error / 2;
-        return ((float) widened) == approximation;
+        float error = (float) (widened - value);
+        return Math.abs(error/2) == 0.0 || approximation + error / 2 == approximation;
 
     }
 
@@ -81,6 +80,13 @@ public class RealTest {
             assertEquals(-i, negative.approximate(1022 + 52 - 29).longValue());
             assertEquals(-d, negative.doubleValue());
         }
+
+        for (int i = 1; i < 0x0090_0000; i += 1) {
+            float f = Float.intBitsToFloat(i);
+            double widened = f;
+            double fuzzed = widened + ((double) Float.MIN_VALUE) / 2;
+            assertTrue(validFloat(Real.valueOf(fuzzed).floatValue(), fuzzed));
+        }
     }
 
     @Test
@@ -91,10 +97,10 @@ public class RealTest {
 
         var val2 = Real.valueOf(300000000L).inverse();
         assertEquals(0.0000000033333332f, val2.floatValue());
+
         var r = new Random();
         for (int i = 0; i < 100; i++) {
             double d = Double.longBitsToDouble(r.nextLong());
-            // double d = -31057005286.479670;
             var original = Real.valueOf(d);
             var doubleInverse = original.inverse().inverse();
             assertEquals(d, doubleInverse.doubleValue());
@@ -125,29 +131,54 @@ public class RealTest {
     }
 
     @Test
+    void testSubnormalMultiplication() {
+        float d1 = Float.intBitsToFloat(0x0592_cb81);
+        float d2 = Float.intBitsToFloat(0xae75_7841);
+        double expected = (double) d1 * (double) d2;
+        Real val = Real.valueOf(d1).multiply(Real.valueOf(d2));
+        float actual = val.floatValue();
+        assertTrue(validFloat(actual, expected));
+    }
+
+    @Test
     void testMultiplication() {
         var r = new Random();
         int successes = 0;
+
+        // float ds1 = Float.intBitsToFloat(0x343d_d53e);
+        // float ds2 = Float.intBitsToFloat(0x0e9c_d023);
+        // float ds1ByDs2Float = Float.intBitsToFloat(0x368_9092);
+        // BigInteger b1 = BigInteger.valueOf(0x00bd_d53e);
+        // BigInteger b2 = BigInteger.valueOf(0x009c_d023);
+        // BigInteger product = b1.multiply(b2);
+        // long productLong = product.longValue() << 1;
+        // double ds1ByDs2Double = (double) ds1 * (double) ds2;
+        // long bits = Double.doubleToLongBits(ds1ByDs2Double);
+        // assertEquals(ds1ByDs2Float, (float) ds1ByDs2Double);
+        // assertEquals(ds1ByDs2Float, Real.valueOf(ds1ByDs2Double).floatValue());
         for (int i = 0; i < 1000; i++) {
             double d1 = Float.intBitsToFloat(r.nextInt());
             double d2 = Float.intBitsToFloat(r.nextInt());
             double expected = d1 * d2;
             float expectedFloat = (float) expected;
-            if (!Float.isFinite(expectedFloat) || expectedFloat == 0.0) {
+            if (!Float.isFinite(expectedFloat) || expectedFloat == 0.0 || expectedFloat == -0.0) {
                 continue;
             }
             var val = Real.valueOf(d1).multiply(Real.valueOf(d2));
             float actual = val.floatValue();
 
-            long d1Bits = Double.doubleToLongBits(d1);
-            long d2Bits = Double.doubleToLongBits(d2);
-            long expectedBits = Double.doubleToLongBits(expected);
-            long actualBits = Double.doubleToLongBits(actual);
+            int d1Bits = Float.floatToIntBits((float) d1);
+            int d2Bits = Float.floatToIntBits((float) d2);
+            long expectedDoubleBits = Double.doubleToLongBits(expected);
+            long actualDoubleBits = Double.doubleToLongBits(actual);
+            int expectedFloatBits = Float.floatToIntBits((float) expected);
+            int actualFloatBits = Float.floatToIntBits(actual);
             float error = (float) (((double) actual) - expected);
-            if(actual + error/2 != actual) {
+            boolean valid = validFloat(actual, expected);
+            if(!valid) {
                 var x = 7;
             }
-            assertEquals(actual, actual + error / 2);
+            assertTrue(valid);
             successes += 1;
         }
         assertTrue(successes > 20);
@@ -173,7 +204,7 @@ public class RealTest {
             long expectedBits = Double.doubleToLongBits(expected);
             long actualBits = Double.doubleToLongBits(actual);
             float error = (float) (((double) actual) - expected);
-            if(actual + error/2 != actual) {
+            if (actual + error / 2 != actual) {
                 var x = 7;
             }
             assertEquals(actual, actual + error / 2);
